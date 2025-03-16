@@ -2,26 +2,25 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using BlogBackend.Models;  // Add this namespace for your DbContext
+using BlogBackend.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//  Database Connection String
+// Database Connection String
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-//  Register BlogDbContext
+// Register BlogDbContext
 builder.Services.AddDbContext<BlogDbContext>(options =>
-    options.UseSqlServer(connectionString)  // UseSqlServer for SQL Server, UseSqlite for SQLite
-);
+    options.UseSqlServer(connectionString));
 
-//  Ensure JWT Key is present
+// Ensure JWT Key is Strong Enough
 var jwtKey = builder.Configuration["Jwt:Key"];
-if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 16)
+if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)  // Require at least 32 chars
 {
-    throw new Exception("JWT Key is missing or too short! It must be at least 16 characters.");
+    throw new Exception("JWT Key is missing or too short! It must be at least 32 characters for security.");
 }
 
-//  Add Authentication Services
+// Add Authentication Services
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -33,22 +32,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero // Ensures token expiration is accurate
         };
     });
 
-//  Add Authorization Services
+// Add Authorization Services
 builder.Services.AddAuthorization();
 
-//  Add Controllers
+// Add Controllers
 builder.Services.AddControllers();
 
-//  Register Your Controllers
-builder.Services.AddScoped<AuthController>();
+// Add Swagger (Enable API Documentation)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-//  Middleware Configuration
+// Enable Swagger
+if (app.Environment.IsDevelopment()) // Show Swagger in Development only
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Middleware Configuration
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
